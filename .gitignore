@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[oc]
+
+# demisto-sdk build output
+.demisto-sdk/
+*.zip

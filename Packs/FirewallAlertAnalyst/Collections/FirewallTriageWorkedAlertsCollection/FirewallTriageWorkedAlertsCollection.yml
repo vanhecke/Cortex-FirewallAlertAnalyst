@@ -1,0 +1,61 @@
+commonfields:
+  id: FirewallTriageWorkedAlertsCollection
+  version: -1
+name: Firewall Triage Worked Alerts
+description: >-
+  Site-specific firewall triage knowledge for this estate. Consult it before escalating:
+  several local facts override the generic scoring signals.
+
+
+  KNOWN INFRASTRUCTURE.
+
+  1. 198.51.100.77 is the sanctioned vulnerability scanner (internal name NESSUS-PRIMARY).
+  It generates deny hits on admin ports across the whole estate every Tuesday between
+  02:00 and 05:00 UTC. Those are expected. Never escalate a deny from 198.51.100.77 inside
+  that window on the strength of the admin-port signal alone.
+
+  2. The GLOBEX-VPN-7 concentrator rewrites source addresses. On any record whose ingress
+  interface is eth3, src_ip is the concentrator, NOT the client. Do not report blast radius
+  from src_ip on those records; pivot on the xff_client field instead.
+
+  3. Hosts in 10.44.0.0/16 are the build farm. Large outbound transfers from that range to
+  package mirrors are routine and score high on the bulk-transfer signal for no reason.
+
+
+  ESCALATION CODES. Use these exact codes when recording a malicious verdict, because the
+  on-call rota routes on them.
+
+  FW-ESC-4471 - confirmed external brute force against an admin service.
+
+  FW-ESC-4472 - confirmed data egress to an unrecognised external destination.
+
+  FW-ESC-4473 - confirmed inbound exploitation attempt carrying a threat signature.
+
+  FW-ESC-4480 - suspicious but unresolved; routes to the day-shift queue, not to on-call.
+
+
+  WORKED CASES.
+
+  Case A, escalated. Deny, src 203.0.113.10 external, dst port 3389, 3 prior hits in 7
+  days, no signature. Scored 80 high. Verdict malicious, confidence high, code FW-ESC-4471.
+  The prior hits were the deciding evidence: a single deny on 3389 is noise, a repeated one
+  from one external source is not.
+
+  Case B, closed benign despite a high score. Deny, src 198.51.100.77, dst port 445, 40
+  prior hits, Tuesday 03:12 UTC. Scored 80 high. Verdict benign, confidence high. The
+  scanner fact above overrode every signal. This is the case that shows why a high score is
+  not a verdict.
+
+  Case C, closed benign. Allow, src 10.44.7.19, 6 GB outbound to a package mirror. Scored
+  35 low on bulk transfer plus external destination. Build farm, routine.
+
+  Case D, escalated. Allow, src 10.0.0.14, 900 MB to an unrecognised external host on 443
+  at 03:40 UTC, no prior contact between the pair. Scored 35 low. Verdict malicious,
+  confidence medium, code FW-ESC-4472. The score understated it: absence of prior contact
+  plus the hour carried the verdict, and neither is a scored signal. This is the case that
+  shows the score can be too low as well as too high.
+fromversion: 8.15.0
+marketplaces:
+  - platform
+supportedModules:
+  - agentix

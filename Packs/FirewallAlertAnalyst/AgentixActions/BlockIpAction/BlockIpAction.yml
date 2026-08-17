@@ -1,0 +1,89 @@
+commonfields:
+  id: BlockIpAction
+  version: -1
+display: Block IP
+name: BlockIpAction
+tags:
+  - firewall
+  - containment
+category: Network Security
+description: >-
+  Block one or more source addresses by running the Block IP - Generic v3 playbook. This
+  is containment: it changes the network, not the investigation. Run it ONLY when the
+  analyst has told you to block a specific address. Never propose it, never run it off
+  your own verdict, and never block an address from the known-infrastructure list. It
+  asks for approval before it runs.
+args:
+  - name: IP
+    description: >-
+      Comma-separated addresses to block, e.g. "203.0.113.10". The analyst names these.
+      Do not widen the list beyond what you were asked to block.
+    type: string
+    required: true
+    isgeneratable: false
+    underlyingargname: IP
+  - name: RuleName
+    description: >-
+      The description shown on the rule this creates. Write one that says why, e.g.
+      "FW triage 1234: repeated denied RDP from external source".
+    type: string
+    required: false
+    isgeneratable: true
+    underlyingargname: RuleName
+  - name: RuleDirection
+    description: Direction of the traffic being blocked - inbound or outbound.
+    type: string
+    required: false
+    defaultvalue: inbound
+    underlyingargname: RuleDirection
+  - name: Tag
+    description: Tag applied to the blocked indicators, for the dynamic address group to pick up.
+    type: string
+    required: false
+    underlyingargname: Tag
+  - name: AutoCommit
+    description: >-
+      Whether to commit the firewall configuration automatically. Leave "No" unless the
+      analyst says otherwise - a commit pushes the change live.
+    type: string
+    required: false
+    defaultvalue: "No"
+    underlyingargname: AutoCommit
+  - name: UserVerification
+    description: >-
+      Whether the playbook asks a human to confirm before blocking. Leave "True". Setting
+      it False removes the last check between you and a live firewall change.
+    type: string
+    required: false
+    defaultvalue: "True"
+    underlyingargname: UserVerification
+# A playbook-backed action. `type: playbook` with the playbook's id, and an EMPTY command -
+# same shape the tenant's own PAN-OS actions use. This cannot be authored in the web UI,
+# which offers only commands and scripts when you build an action; it has to come from a
+# pack.
+#
+# No outputs are declared. Block IP - Generic v3 fans out across Aria, Stealthwatch,
+# Cisco ASA, Signal Sciences, Akamai and Prisma SASE, and every output it declares is
+# under one of those vendor prefixes. Which one is populated depends on which integration
+# is enabled, so there is no output worth promising the agent.
+underlyingcontentitem:
+  id: Block IP - Generic v3
+  name: Block IP - Generic v3
+  type: playbook
+  version: -1
+requiresuserapproval: true
+fewshots:
+  - >-
+    On explicit instruction: IP="203.0.113.10", RuleName="FW triage 1234: repeated denied
+    RDP from external source", RuleDirection="inbound". The analyst said to block it; you
+    supplied only the rule description.
+  - >-
+    WRONG: running this because you decided the alert was malicious. Containment is the
+    analyst's call. A verdict is not an instruction.
+  - >-
+    WRONG: blocking 198.51.100.77 or anything else the site knowledge lists as sanctioned
+    infrastructure. Check first; say why you will not, and stop.
+marketplaces:
+  - platform
+supportedModules:
+  - agentix

@@ -1,0 +1,74 @@
+commonfields:
+  id: SearchFirewallLogsAction
+  version: -1
+display: Search Firewall Logs
+name: SearchFirewallLogsAction
+tags:
+  - firewall
+  - triage
+category: Analytics & SIEM
+description: >-
+  START a read-only XQL search over firewall datasets to pull the traffic around an alert.
+  Asynchronous: it returns an execution_id, NOT the rows - fetch those with "Get XQL Query
+  Results". Use it to answer one question at a time (what else did this source touch, did
+  this pair talk before), not to dump a dataset.
+args:
+  - name: query
+    description: >-
+      The XQL search. The firewall traffic dataset is panw_ngfw_traffic_raw and its address
+      fields are source_ip, dest_ip and dest_port - use those exact names, do not guess.
+      Scope it to the source or pair under triage, e.g.
+      "dataset = panw_ngfw_traffic_raw | filter source_ip = \"203.0.113.10\" | limit 200".
+      If you are unsure of XQL syntax, ask the Cortex documentation tools first.
+    type: string
+    required: true
+    isgeneratable: true
+    underlyingargname: query
+  - name: query_name
+    description: Short label for this execution. Always pass "firewall_alert_analyst".
+    type: string
+    required: true
+    defaultvalue: firewall_alert_analyst
+    underlyingargname: query_name
+  - name: time_frame
+    description: Relative window the search covers, e.g. "24 hours" or "7 days".
+    type: string
+    required: false
+    defaultvalue: 24 hours
+    underlyingargname: time_frame
+outputs:
+  - name: execution_id
+    description: The id of the started search. Pass it to "Get XQL Query Results".
+    type: string
+    underlyingoutputcontextpath: PaloAltoNetworksXQL.GenericQuery.execution_id
+  - name: status
+    description: Execution status reported by the query engine.
+    type: string
+    underlyingoutputcontextpath: PaloAltoNetworksXQL.GenericQuery.status
+  - name: query
+    description: The executed query string.
+    type: string
+    disabled: true
+    underlyingoutputcontextpath: PaloAltoNetworksXQL.GenericQuery.query
+underlyingcontentitem:
+  id: _any_
+  name: _any_
+  type: command
+  version: -1
+  command: xdr-xql-generic-query
+requiresuserapproval: true
+fewshots:
+  - >-
+    Blast radius: query="dataset = panw_ngfw_traffic_raw | filter source_ip =
+    \"203.0.113.10\" | fields dest_ip, dest_port, action | limit 200",
+    time_frame="24 hours".
+  - >-
+    Prior contact between a pair: query="dataset = panw_ngfw_traffic_raw | filter source_ip =
+    \"203.0.113.10\" and dest_ip = \"10.0.0.5\" | limit 50", time_frame="7 days".
+  - >-
+    WRONG: an unfiltered "dataset = panw_ngfw_traffic_raw | limit 1000". Triage asks a
+    question about one source or one pair; scope the filter to it.
+marketplaces:
+  - platform
+supportedModules:
+  - agentix

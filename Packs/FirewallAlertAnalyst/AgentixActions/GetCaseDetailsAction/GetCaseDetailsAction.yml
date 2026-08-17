@@ -1,0 +1,98 @@
+commonfields:
+  id: GetCaseDetailsAction
+  version: -1
+display: Get Case Details
+name: GetCaseDetailsAction
+tags:
+  - firewall
+  - triage
+category: Analytics & SIEM
+description: >-
+  Read the case a firewall alert belongs to, including its enriched data: the other issue
+  ids under it, the network and file artifacts, the notes and the console link. Use it
+  BEFORE searching firewall logs - the case usually already says what else fired around
+  this alert, and it costs nothing. Pass the case id you were given; do not fish for cases.
+args:
+  - name: case_id_list
+    description: The case id to read. Comma-separated if you genuinely have several.
+    type: string
+    required: true
+    underlyingargname: case_id_list
+  - name: get_enriched_case_data
+    description: >-
+      Include issue ids, artifacts, notes and the console link. Leave true - the enriched
+      fields are the reason to call this. Only honoured for 10 cases or fewer.
+    type: boolean
+    required: false
+    defaultvalue: "true"
+    underlyingargname: get_enriched_case_data
+  - name: limit
+    description: Maximum cases to return. Keep it at or below 10 or enrichment is dropped.
+    type: number
+    required: false
+    defaultvalue: "10"
+    underlyingargname: limit
+outputs:
+  - name: case_id
+    description: Unique id of the case.
+    type: string
+    underlyingoutputcontextpath: Core.Case.case_id
+  - name: case_name
+    description: Name of the case.
+    type: string
+    underlyingoutputcontextpath: Core.Case.case_name
+  - name: status
+    description: Current status of the case.
+    type: string
+    underlyingoutputcontextpath: Core.Case.status
+  - name: severity
+    description: Severity of the case. Context for the alert, not a verdict on it.
+    type: string
+    underlyingoutputcontextpath: Core.Case.severity
+  - name: description
+    description: Description of the case.
+    type: string
+    underlyingoutputcontextpath: Core.Case.description
+  - name: issue_ids
+    description: Ids of the other issues under this case. The cheapest blast-radius signal there is.
+    type: unknown
+    underlyingoutputcontextpath: Core.Case.CaseExtraData.issue_ids
+  - name: network_artifacts
+    description: Network artifacts already attached to the case, e.g. addresses seen by other issues.
+    type: unknown
+    underlyingoutputcontextpath: Core.Case.CaseExtraData.network_artifacts
+  - name: notes
+    description: Analyst notes on the case. Read them before repeating work someone already did.
+    type: string
+    underlyingoutputcontextpath: Core.Case.CaseExtraData.notes
+  - name: xdr_url
+    description: Console link to the case, so the analyst can open what you cite.
+    type: string
+    underlyingoutputcontextpath: Core.Case.CaseExtraData.xdr_url
+# `_any_` plus a command name, exactly as the two XQL actions do: the action binds to
+# whichever enabled instance provides `core-get-cases`. Not `_builtin_` - that sentinel is
+# for platform handlers (setCase, runXQLQuery, enrichIndicators), and the tenant ships no
+# builtin that READS a case. `core-get-cases` is the real read, and Cortex Core - Platform
+# is present on every tenant.
+underlyingcontentitem:
+  id: _any_
+  name: _any_
+  type: command
+  version: -1
+  command: core-get-cases
+requiresuserapproval: false
+fewshots:
+  - >-
+    Context before searching: case_id_list="1234". Returns the case status and severity
+    plus issue_ids, network_artifacts and notes - often enough to answer "what else fired
+    around this alert" without an XQL search at all.
+  - >-
+    Empty issue_ids means the alert is alone on its case, which is itself evidence. Report
+    it rather than treating it as a failed call.
+  - >-
+    WRONG: calling this with no case_id_list to browse recent cases. This reads the case
+    under triage. Fishing returns 100 unrelated cases and drops the enriched fields.
+marketplaces:
+  - platform
+supportedModules:
+  - agentix

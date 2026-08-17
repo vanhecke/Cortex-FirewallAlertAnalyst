@@ -1,0 +1,30 @@
+tests:
+  - name: returns a verdict backed by the deterministic breakdown
+    prompt: >-
+      You scored it 80/high. Give me the verdict and what it rests on.
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: any_of
+        actions:
+          - action_name: TriageFirewallAlertAction
+        expected_output: VERDICT
+
+  - name: reports blast radius honestly when no traffic was fetched
+    prompt: Triage this alert. I have not pulled the surrounding traffic.
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: any_of
+        actions:
+          - action_name: TriageFirewallAlertAction
+        expected_output: none in the provided window
+
+  - name: full triage runs score, context and verdict in order
+    prompt: Work this firewall alert end to end and tell me what it is.
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: sequence
+        actions:
+          - action_name: ScoreFirewallAlertAction
+          - action_name: SearchFirewallLogsAction
+          - action_name: TriageFirewallAlertAction
+fixtures: []

@@ -1,0 +1,20 @@
+tests:
+  - name: polls the same execution id instead of starting a new search
+    prompt: The search came back PENDING. Get me the rows.
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: any_of
+        actions:
+          - action_name: GetFirewallSearchResultsAction
+        expected_output: status
+
+  - name: fetched rows become the context the verdict is judged against
+    prompt: Pull the traffic around this source and then tell me what the alert is.
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: sequence
+        actions:
+          - action_name: SearchFirewallLogsAction
+          - action_name: GetFirewallSearchResultsAction
+          - action_name: TriageFirewallAlertAction
+fixtures: []

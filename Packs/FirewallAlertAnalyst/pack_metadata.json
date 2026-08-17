@@ -1,0 +1,24 @@
+{
+    "name": "FirewallAlertAnalyst",
+    "description": "Worked example: a firewall alert triage agent exercising every Agentix content type and action capability.",
+    "support": "developer",
+    "currentVersion": "1.0.0",
+    "author": "Joris Vanhecke",
+    "url": "https://github.com/vanhecke/Cortex-FirewallAlertAnalyst",
+    "email": "",
+    "categories": [
+        "Analytics & SIEM"
+    ],
+    "tags": [],
+    "useCases": [],
+    "keywords": [
+        "agentix",
+        "agent",
+        "firewall",
+        "triage",
+        "example"
+    ],
+    "marketplaces": [
+        "platform"
+    ]
+}

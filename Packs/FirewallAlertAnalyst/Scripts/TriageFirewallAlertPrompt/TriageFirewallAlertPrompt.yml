@@ -1,0 +1,70 @@
+commonfields:
+  id: TriageFirewallAlertPrompt
+  version: -1
+name: TriageFirewallAlertPrompt
+comment: >-
+  Prompt-backed (isllm) triage step for the Firewall Alert Analyst agent. Takes a scored
+  alert plus its surrounding traffic and writes the analyst verdict: benign, suspicious or
+  malicious, with the evidence behind it. There is no Python here - the judgment is the
+  model's, and the reproducible half of triage lives in ScoreFirewallAlertScript.
+type: python
+isllm: true
+systemprompt: >-
+  You are a firewall alert triage analyst. You reason only from the alert, the score
+  breakdown and the surrounding traffic you are given. You never assert that an address,
+  port or signature is malicious without evidence in that input, and you never invent a
+  threat name. A high score is a prompt to look, not a verdict. When the evidence does not
+  settle the question you say so and name the one query that would.
+userprompt: |-
+  Alert under triage:
+
+  ${alert}
+
+  Deterministic score breakdown from Score Firewall Alert:
+
+  ${score_breakdown}
+
+  Surrounding traffic from the same source (may be empty):
+
+  ${context_traffic}
+
+  Answer with exactly these four sections:
+
+  1. VERDICT - benign, suspicious or malicious, and your confidence as high, medium or low.
+  2. EVIDENCE - the specific fields and traffic that drove the verdict. Quote values. If
+     the deterministic score disagrees with your read, say which you trust and why.
+  3. BLAST RADIUS - which other hosts or users this source touched in the traffic you were
+     given. Write "none in the provided window" rather than guessing.
+  4. NEXT QUERY - the single most useful follow-up question, phrased so it can be run
+     against firewall logs. If the evidence already settles it, write "none needed".
+
+  Do not recommend blocking or any other containment action. That is the analyst's call.
+# claude-opus-4-8 advertises supportedParams maxTokens / stopSequences / thinking /
+# outputConfig - and NOT temperature (only claude-sonnet-4-6 accepts that). So no
+# temperature here; setting one for a model that does not take it is a likely 500.
+# maxTokens range for this model is 1..128000, default 8192.
+model: claude-opus-4-8
+promptConfig:
+  maxOutputTokens: 4096
+  webSearch: false
+args:
+  - name: alert
+    description: The alert under triage, as JSON.
+    required: true
+  - name: score_breakdown
+    description: The score, band and reasons returned by Score Firewall Alert.
+    required: true
+  - name: context_traffic
+    description: Other recent records from the same source. Optional.
+    required: false
+# Exactly one output. The platform rejects a prompt with none: "'Outputs' attribute must
+# have 1 value (52)". The prompt answers in four prose sections, so the single output is
+# that answer.
+outputs:
+  - contextPath: FirewallAlert.Triage.verdict
+    description: The triage answer - VERDICT, EVIDENCE, BLAST RADIUS and NEXT QUERY.
+    type: String
+fromversion: 8.15.0
+tags: []
+marketplaces:
+  - platform

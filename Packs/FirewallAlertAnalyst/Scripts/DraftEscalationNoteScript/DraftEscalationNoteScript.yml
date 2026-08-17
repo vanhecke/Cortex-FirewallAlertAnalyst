@@ -1,0 +1,44 @@
+commonfields:
+  id: DraftEscalationNoteScript
+  version: -1
+name: DraftEscalationNoteScript
+comment: >-
+  Renders the escalation note for a triaged firewall alert. Formatting only - it writes
+  nothing to the case and reaches nothing outside the conversation. It DOES reject an
+  escalation code that is not on the routing list, which is what makes the isgeneratable
+  split on the Draft Escalation Note action demonstrable: prose is generated, identifiers
+  are not.
+script: ''
+type: python
+subtype: python3
+dockerimage: demisto/python3:3.9.8.24399
+args:
+  - name: summary
+    description: Two or three sentences an on-call analyst can act on. Written by the model.
+    required: true
+  - name: escalation_code
+    description: One of FW-ESC-4471, FW-ESC-4472, FW-ESC-4473, FW-ESC-4480. Rejected if unknown.
+    required: true
+  - name: case_id
+    description: The case the alert belongs to.
+    required: true
+  - name: verdict
+    description: benign, suspicious or malicious.
+    required: true
+  - name: next_step
+    description: The single follow-up worth running, or "none needed". Written by the model.
+    required: false
+outputs:
+  - contextPath: FirewallAlert.Escalation.note
+    description: The rendered note, as markdown.
+    type: String
+  - contextPath: FirewallAlert.Escalation.code
+    description: The escalation code the note routes on.
+    type: String
+  - contextPath: FirewallAlert.Escalation.queue
+    description: Where that code routes - on-call or day-shift.
+    type: String
+fromversion: 8.14.0
+tags: []
+marketplaces:
+  - platform

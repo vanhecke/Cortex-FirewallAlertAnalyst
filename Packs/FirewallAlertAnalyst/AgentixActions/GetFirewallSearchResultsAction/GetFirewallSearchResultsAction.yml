@@ -1,0 +1,54 @@
+commonfields:
+  id: GetFirewallSearchResultsAction
+  version: -1
+display: Get Firewall Search Results
+name: GetFirewallSearchResultsAction
+tags:
+  - firewall
+  - triage
+category: Analytics & SIEM
+description: >-
+  Retrieve the rows of a search started with "Search Firewall Logs", by its execution_id. A
+  search can take MINUTES: PENDING is normal, not a failure. Wait about 10 seconds between
+  polls and call this again with the SAME execution_id, up to 30 polls, before concluding
+  anything is wrong. Never start a new search just to fetch results.
+args:
+  - name: query_id
+    description: The execution_id returned by "Search Firewall Logs".
+    type: string
+    required: true
+    underlyingargname: query_id
+outputs:
+  - name: status
+    description: Execution status (PENDING until the search completes, then SUCCESS).
+    type: string
+    underlyingoutputcontextpath: PaloAltoNetworksXQL.GenericQuery.status
+  - name: results
+    description: The rows returned by the completed search. This is the context traffic to triage with.
+    type: unknown
+    underlyingoutputcontextpath: PaloAltoNetworksXQL.GenericQuery.results
+  - name: number_of_results
+    description: How many rows the search returned.
+    type: number
+    underlyingoutputcontextpath: PaloAltoNetworksXQL.GenericQuery.number_of_results
+underlyingcontentitem:
+  id: _any_
+  name: _any_
+  type: command
+  version: -1
+  command: xdr-xql-get-query-results
+requiresuserapproval: false
+fewshots:
+  - >-
+    Read a started search: query_id="<the execution_id Search Firewall Logs returned>".
+    status=SUCCESS means results is populated; hand those rows to Triage Firewall Alert.
+  - >-
+    status=PENDING means the engine is still running. Wait ~10 seconds and call this again
+    with the SAME query_id, up to 30 times, before reporting a problem.
+  - >-
+    WRONG: reacting to PENDING by starting a fresh search. The execution_id stays valid;
+    keep polling it.
+marketplaces:
+  - platform
+supportedModules:
+  - agentix

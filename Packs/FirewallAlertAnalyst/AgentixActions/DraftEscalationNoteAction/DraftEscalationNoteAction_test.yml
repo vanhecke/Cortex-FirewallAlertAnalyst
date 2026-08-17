@@ -1,0 +1,48 @@
+tests:
+  # The valid escalation codes live ONLY in the worked-alerts collection, which is not
+  # reachable at runtime on current tenants. These cases therefore describe what the
+  # agent SHOULD do when the knowledge is missing: ask, not guess.
+  - name: composes the summary itself when given the code
+    prompt: >-
+      Case 1234, confirmed external brute force on RDP, verdict malicious. Escalate it
+      under FW-ESC-4471.
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: any_of
+        actions:
+          - action_name: DraftEscalationNoteAction
+            arguments:
+              case_id: "1234"
+              verdict: malicious
+              escalation_code: FW-ESC-4471
+        expected_output: on-call
+
+  - name: asks for the code rather than inventing one when it cannot look it up
+    prompt: Case 1234, verdict malicious. Escalate it.
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: any_of
+        actions: []
+        expected_output: escalation code
+
+  - name: the note is drafted only after a verdict exists
+    prompt: >-
+      Work the firewall alert on case 1234 and escalate it under FW-ESC-4471 if it
+      warrants that.
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: sequence
+        actions:
+          - action_name: ScoreFirewallAlertAction
+          - action_name: TriageFirewallAlertAction
+          - action_name: DraftEscalationNoteAction
+
+  - name: an unknown escalation code is rejected rather than routed
+    prompt: Case 1234, verdict malicious. Escalate this under code FW-ESC-9999.
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: any_of
+        actions:
+          - action_name: DraftEscalationNoteAction
+        expected_error: unknown escalation code
+fixtures: []

@@ -1,0 +1,46 @@
+commonfields:
+  id: ScoreFirewallAlertScript
+  version: -1
+name: ScoreFirewallAlertScript
+comment: >-
+  Deterministic risk scoring for a single firewall alert. Pure arithmetic over fields the
+  alert already carries - no model call, no tenant call - so two runs on the same alert
+  give the same number. Backs the Score Firewall Alert action of the Firewall Alert
+  Analyst agent.
+script: ''
+type: python
+subtype: python3
+dockerimage: demisto/python3:3.9.8.24399
+args:
+  - name: alert
+    description: One alert as a JSON object (action, src_ip, dst_port, bytes, prior_hits, threat_id).
+    required: true
+  - name: baseline_days
+    description: How many days of history prior_hits was counted over. Only affects the reason text.
+    required: false
+    defaultValue: "7"
+  - name: debug
+    description: Emit the weight table and the parsed alert under raw_debug. Troubleshooting only.
+    required: false
+    defaultValue: "false"
+  - name: legacy_weights
+    description: Deprecated. The pre-1.0 weight table was removed; this argument is ignored.
+    required: false
+    deprecated: true
+outputs:
+  - contextPath: FirewallAlert.Score.score
+    description: Risk score from 0 to 100.
+    type: Number
+  - contextPath: FirewallAlert.Score.band
+    description: informational, low, medium or high.
+    type: String
+  - contextPath: FirewallAlert.Score.reasons
+    description: One line per signal that contributed, with its weight.
+    type: Unknown
+  - contextPath: FirewallAlert.Score.raw_debug
+    description: Weight table and parsed alert. Present only when debug is true.
+    type: String
+fromversion: 8.14.0
+tags: []
+marketplaces:
+  - platform

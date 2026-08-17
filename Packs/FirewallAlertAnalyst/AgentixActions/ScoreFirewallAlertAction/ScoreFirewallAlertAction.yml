@@ -1,0 +1,78 @@
+commonfields:
+  id: ScoreFirewallAlertAction
+  version: -1
+display: Score Firewall Alert
+name: ScoreFirewallAlertAction
+tags:
+  - firewall
+  - triage
+category: Utilities
+description: >-
+  Score one firewall alert 0-100 and band it informational / low / medium / high. Pure
+  arithmetic over fields the alert already carries, so the same alert always scores the
+  same. Run it BEFORE Triage Firewall Alert and hand the breakdown to it: the score is
+  evidence for the verdict, not the verdict.
+args:
+  - name: alert
+    description: One alert as JSON (action, src_ip, dst_port, bytes, prior_hits, threat_id).
+    type: string
+    required: true
+    isgeneratable: true
+    underlyingargname: alert
+  - name: baseline_days
+    description: Days of history prior_hits was counted over. Affects the reason text only.
+    type: number
+    required: false
+    defaultvalue: "7"
+    underlyingargname: baseline_days
+  - name: debug
+    description: Emit the weight table under raw_debug. Troubleshooting only, not for triage.
+    type: boolean
+    required: false
+    hidden: true
+    underlyingargname: debug
+  - name: legacy_weights
+    description: Deprecated. The pre-1.0 weight table was removed and this argument is ignored.
+    type: string
+    required: false
+    disabled: true
+    underlyingargname: legacy_weights
+outputs:
+  - name: score
+    description: Risk score from 0 to 100.
+    type: number
+    underlyingoutputcontextpath: FirewallAlert.Score.score
+  - name: band
+    description: informational, low, medium or high.
+    type: string
+    underlyingoutputcontextpath: FirewallAlert.Score.band
+  - name: reasons
+    description: One line per signal that contributed, with its weight. Quote these as evidence.
+    type: unknown
+    underlyingoutputcontextpath: FirewallAlert.Score.reasons
+  - name: raw_debug
+    description: Weight table and parsed alert. Troubleshooting only.
+    type: string
+    disabled: true
+    underlyingoutputcontextpath: FirewallAlert.Score.raw_debug
+underlyingcontentitem:
+  id: ScoreFirewallAlertScript
+  name: ScoreFirewallAlertScript
+  type: script
+  version: -1
+requiresuserapproval: false
+fewshots:
+  - >-
+    Score a denied inbound hit: alert="{\"action\":\"deny\",\"src_ip\":\"203.0.113.10\",
+    \"dst_port\":3389,\"bytes\":4200,\"prior_hits\":3}". Returns 80/high with the four
+    signals that got it there.
+  - >-
+    A clean internal allow scores 0 and bands informational. That is a real answer, not a
+    failure - report it and stop.
+  - >-
+    WRONG: passing a list of alerts. This scores exactly ONE alert; loop if you have
+    several, so each verdict cites its own breakdown.
+marketplaces:
+  - platform
+supportedModules:
+  - agentix

@@ -1,0 +1,30 @@
+tests:
+  - name: reads the case it was given rather than browsing
+    prompt: This alert is on case 1234. What else is going on there?
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: any_of
+        actions:
+          - action_name: GetCaseDetailsAction
+            arguments:
+              case_id_list: "1234"
+        expected_output: issue_ids
+
+  - name: case context is gathered before an XQL search is started
+    prompt: Work the firewall alert on case 1234 and tell me its blast radius.
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: sequence
+        actions:
+          - action_name: GetCaseDetailsAction
+          - action_name: SearchFirewallLogsAction
+
+  - name: a case with no other issues is a reportable result, not a retry
+    prompt: Anything else on this case besides the firewall alert?
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: any_of
+        actions:
+          - action_name: GetCaseDetailsAction
+        expected_output: alone on its case
+fixtures: []

@@ -1,0 +1,22 @@
+tests:
+  - name: scopes the search to the source under triage
+    prompt: What else did 203.0.113.10 talk to in the last day?
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: any_of
+        actions:
+          - action_name: SearchFirewallLogsAction
+            arguments:
+              query_name: firewall_alert_analyst
+              time_frame: 24 hours
+        expected_output: execution_id
+
+  - name: starting the search and reading its rows are two actions
+    prompt: Pull the traffic around this alert and show me what you found.
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: sequence
+        actions:
+          - action_name: SearchFirewallLogsAction
+          - action_name: GetFirewallSearchResultsAction
+fixtures: []

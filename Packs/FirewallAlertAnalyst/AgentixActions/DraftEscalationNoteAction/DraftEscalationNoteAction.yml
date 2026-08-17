@@ -1,0 +1,95 @@
+commonfields:
+  id: DraftEscalationNoteAction
+  version: -1
+display: Draft Escalation Note
+name: DraftEscalationNoteAction
+tags:
+  - firewall
+  - triage
+category: Utilities
+description: >-
+  Render the escalation note for an alert you have decided to escalate. You write the
+  summary and the next step; the case id, the verdict and the escalation code must come
+  from what you already have - the case, the triage output and the worked-alerts
+  collection. It formats only: nothing is written to the case.
+args:
+  # isgeneratable is a MARKER, not a constraint. Tested live: with escalation_code set
+  # to false the agent still supplied one (FW-ESC-4480) unprompted. So false does not
+  # stop the model filling an argument, and nothing here is enforced by the flag - the
+  # arg descriptions and the skill body are what actually steer it, and the script is
+  # what actually rejects a bad code. PANW marks 20 of 803 args true, all of them free
+  # prose the model authors (mail bodies, war-room entries, rule names).
+  - name: summary
+    description: >-
+      Two or three sentences an on-call analyst can act on: what happened, what it rests
+      on, what is still open. Your own words.
+    type: string
+    required: true
+    isgeneratable: true
+    underlyingargname: summary
+  - name: next_step
+    description: The single follow-up worth running, or "none needed". Your own words.
+    type: string
+    required: false
+    isgeneratable: true
+    underlyingargname: next_step
+  # The valid codes are deliberately NOT listed here, nor in the fewshots, nor in the
+  # skill body. They exist only in the Firewall Triage Worked Alerts collection. That
+  # makes this argument the pack's honest test of whether collection knowledge is
+  # reachable at all - and on current tenants it is not (see README).
+  - name: escalation_code
+    description: >-
+      The routing code for this escalation. Take it from the site's worked-alerts
+      knowledge; the on-call rota routes on the exact code. If you cannot find the list,
+      say so and ask - do not guess a code that looks like the others.
+    type: string
+    required: true
+    isgeneratable: false
+    underlyingargname: escalation_code
+  - name: case_id
+    description: The case id, as returned by Get Case Details or given to you.
+    type: string
+    required: true
+    isgeneratable: false
+    underlyingargname: case_id
+  - name: verdict
+    description: benign, suspicious or malicious - the verdict Triage Firewall Alert returned.
+    type: string
+    required: true
+    isgeneratable: false
+    underlyingargname: verdict
+outputs:
+  - name: note
+    description: The rendered escalation note, as markdown.
+    type: string
+    underlyingoutputcontextpath: FirewallAlert.Escalation.note
+  - name: code
+    description: The escalation code the note routes on.
+    type: string
+    underlyingoutputcontextpath: FirewallAlert.Escalation.code
+  - name: queue
+    description: Where that code routes - on-call or day-shift.
+    type: string
+    underlyingoutputcontextpath: FirewallAlert.Escalation.queue
+underlyingcontentitem:
+  id: DraftEscalationNoteScript
+  name: DraftEscalationNoteScript
+  type: script
+  version: -1
+requiresuserapproval: true
+fewshots:
+  - >-
+    Escalating a confirmed hit: summary="<your two or three sentences>", case_id="1234",
+    verdict="malicious", next_step="none needed", escalation_code="<the code the site
+    knowledge gives for this category>". You compose the summary; the code you look up.
+  - >-
+    WRONG: guessing a code because it looks like the ones you have seen. The rota routes
+    on the exact string and an unknown one is rejected. If you cannot reach the list, say
+    that and ask for the code.
+  - >-
+    WRONG: calling this for a benign alert. There is nothing to route. Say it is clean
+    and stop.
+marketplaces:
+  - platform
+supportedModules:
+  - agentix

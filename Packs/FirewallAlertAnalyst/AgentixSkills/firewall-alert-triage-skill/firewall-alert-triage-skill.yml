@@ -1,0 +1,22 @@
+commonfields:
+  id: firewall-alert-triage-skill
+  version: -1
+name: Firewall Alert Triage
+description: >-
+  The triage procedure the Firewall Alert Analyst follows: score the alert deterministically
+  before judging it, pull only the traffic that answers a stated question, separate what the
+  evidence shows from what it merely suggests, and close with one recorded verdict. Covers
+  the four signal families that drive most firewall escalations - admin ports reached from
+  outside, repeat sources, bulk transfers and signature hits - and the traps that make each
+  one misleading on its own.
+content: ""
+fromversion: 8.15.0
+tags:
+  - firewall
+  - triage
+internal: false
+disabled: false
+marketplaces:
+  - platform
+supportedModules:
+  - agentix

@@ -1,0 +1,30 @@
+tests:
+  - name: scores a denied inbound RDP hit as high
+    prompt: >-
+      Score this alert: deny, src 203.0.113.10, dst port 3389, 4200 bytes, 3 prior hits.
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: any_of
+        actions:
+          - action_name: ScoreFirewallAlertAction
+        expected_output: high
+
+  - name: a clean internal allow scores zero and that is a real answer
+    prompt: >-
+      Score this one: allow, src 10.0.0.5, dst 10.0.0.9, port 443, no signature.
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: any_of
+        actions:
+          - action_name: ScoreFirewallAlertAction
+        expected_output: informational
+
+  - name: scoring comes before the verdict
+    prompt: Is this firewall alert worth escalating?
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: sequence
+        actions:
+          - action_name: ScoreFirewallAlertAction
+          - action_name: TriageFirewallAlertAction
+fixtures: []

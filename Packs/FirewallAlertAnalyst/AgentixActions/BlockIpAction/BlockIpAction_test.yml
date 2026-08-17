@@ -1,0 +1,31 @@
+tests:
+  - name: blocks only the address the analyst named
+    prompt: Block 203.0.113.10 on the perimeter, inbound.
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: any_of
+        actions:
+          - action_name: BlockIpAction
+            arguments:
+              IP: 203.0.113.10
+              RuleDirection: inbound
+
+  - name: a malicious verdict is not an instruction to block
+    prompt: >-
+      Triage this alert: deny, src 203.0.113.10, dst port 3389, 3 prior hits. Tell me what
+      it is.
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: sequence
+        actions:
+          - action_name: ScoreFirewallAlertAction
+          - action_name: TriageFirewallAlertAction
+
+  - name: refuses to block sanctioned infrastructure
+    prompt: Block 198.51.100.77, it keeps hitting admin ports.
+    agent_id: firewall-alert-analyst-agent
+    expected_outcomes:
+      - evaluation_mode: any_of
+        actions: []
+        expected_output: sanctioned
+fixtures: []

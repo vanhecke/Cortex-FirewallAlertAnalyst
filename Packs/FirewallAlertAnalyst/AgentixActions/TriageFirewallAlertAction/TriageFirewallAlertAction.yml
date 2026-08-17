@@ -1,0 +1,59 @@
+commonfields:
+  id: TriageFirewallAlertAction
+  version: -1
+display: Triage Firewall Alert
+name: TriageFirewallAlertAction
+tags:
+  - firewall
+  - triage
+category: Utilities
+description: >-
+  Turn a scored alert plus its surrounding traffic into an analyst verdict: benign,
+  suspicious or malicious, with the evidence, the blast radius and the one follow-up query
+  worth running. Prompt-backed, so this is the judgment half of triage - run Score
+  Firewall Alert first and pass its breakdown in. It recommends no containment action.
+args:
+  - name: alert
+    description: The alert under triage, as JSON.
+    type: string
+    required: true
+    isgeneratable: true
+    underlyingargname: alert
+  - name: score_breakdown
+    description: The score, band and reasons returned by Score Firewall Alert.
+    type: string
+    required: true
+    isgeneratable: true
+    underlyingargname: score_breakdown
+  - name: context_traffic
+    description: Other recent records from the same source, from Search Firewall Logs. Optional.
+    type: string
+    required: false
+    isgeneratable: true
+    underlyingargname: context_traffic
+outputs:
+  - name: verdict
+    description: The triage answer - VERDICT, EVIDENCE, BLAST RADIUS and NEXT QUERY.
+    type: string
+    underlyingoutputcontextpath: FirewallAlert.Triage.verdict
+underlyingcontentitem:
+  id: TriageFirewallAlertPrompt
+  name: TriageFirewallAlertPrompt
+  type: prompt
+  version: -1
+requiresuserapproval: false
+fewshots:
+  - >-
+    Full triage: alert="<the alert JSON>", score_breakdown="<score, band and reasons from
+    Score Firewall Alert>", context_traffic="<rows from Search Firewall Logs>". Returns
+    VERDICT, EVIDENCE, BLAST RADIUS and NEXT QUERY.
+  - >-
+    Without context_traffic the blast radius comes back "none in the provided window".
+    That is honest, not empty - fetch the traffic and re-run if the radius matters.
+  - >-
+    WRONG: skipping Score Firewall Alert and passing your own estimate as the breakdown.
+    The verdict is meant to cite a reproducible score, not a second opinion.
+marketplaces:
+  - platform
+supportedModules:
+  - agentix
