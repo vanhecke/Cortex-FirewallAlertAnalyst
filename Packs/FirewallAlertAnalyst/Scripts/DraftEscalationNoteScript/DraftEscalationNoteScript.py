@@ -33,28 +33,27 @@ def render(summary, code, case_id, verdict, next_step):
     code = str(code or "").strip().upper()
     if code not in CODES:
         raise ValueError(
-            "unknown escalation code %r. Use one of: %s. Take the code from the worked-alerts "
+            f"unknown escalation code {code!r}. Use one of: {', '.join(sorted(CODES))}. Take the code from the worked-alerts "
             "collection; do not invent one, the on-call rota routes on it."
-            % (code, ", ".join(sorted(CODES)))
         )
 
     verdict = str(verdict or "").strip().lower()
     if verdict not in VERDICTS:
-        raise ValueError("verdict must be one of %s, got %r" % (", ".join(VERDICTS), verdict))
+        raise ValueError(f"verdict must be one of {', '.join(VERDICTS)}, got {verdict!r}")
 
     queue = CODES[code].split(":", 1)[0]
     lines = [
         "### Escalation note",
         "",
-        "**Case** %s" % case_id,
-        "**Verdict** %s" % verdict,
-        "**Code** %s (%s)" % (code, CODES[code]),
+        f"**Case** {case_id}",
+        f"**Verdict** {verdict}",
+        f"**Code** {code} ({CODES[code]})",
         "",
         str(summary or "").strip(),
     ]
     step = str(next_step or "").strip()
     if step and step.lower() != "none needed":
-        lines += ["", "**Next** %s" % step]
+        lines += ["", f"**Next** {step}"]
     return "\n".join(lines), queue
 
 

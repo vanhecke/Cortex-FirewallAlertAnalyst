@@ -27,7 +27,7 @@ It ships seven actions covering four `underlyingcontentitem` types:
 | Get Case Details | `command` | bound via `_any_` to `core-get-cases` |
 | Search Firewall Logs | `command` | async XQL, approval-gated |
 | Get Firewall Search Results | `command` | polling discipline in `fewshots` |
-| Triage Firewall Alert | `prompt` | `isllm` script with a pinned model |
+| Triage Firewall Alert | `prompt` | `isllm` script on the `Pro` model tier |
 | Draft Escalation Note | `script` | the `isgeneratable` split |
 | Block IP | `playbook` | wraps `Block IP - Generic v3` |
 
@@ -63,8 +63,8 @@ Present on most tenants:
 - `Cortex Core - Platform` for `core-get-cases`
 - an XQL integration for `xdr-xql-generic-query` / `xdr-xql-get-query-results`
 - the `Block IP - Generic v3` playbook
-- an LLM offering `claude-opus-4-8` (change `model:` in
-  `Scripts/TriageFirewallAlertPrompt/` if your tenant offers something else)
+- an LLM on the `Pro` tier (change `promptConfig.modelTier` in
+  `Scripts/TriageFirewallAlertPrompt/` to `Thinking` or `Flash` to use another)
 
 The firewall search targets the `panw_ngfw_traffic_raw` dataset with `source_ip` /
 `dest_ip` / `dest_port`. Point it at your own dataset if you use a different firewall.
@@ -89,11 +89,17 @@ matching block in the skill body. See `AGENT_SPEC.md` section 16.
 
 ## Known not to work
 
-The knowledge collection is a dangling reference. A pack can carry a collection's name and
-description but no documents, and the upload registers the id on the agent while creating
-no collection object - so the agent's knowledge lookup returns nothing. This is documented
-rather than hidden: the escalation codes the agent needs live only in that collection, so
-the agent should tell you it cannot find them and ask. See the pack README.
+A pack cannot ship knowledge text. A Collection carries a name and a description and
+nothing else, so the collection this pack uploads lands on the tenant empty and the
+agent's knowledge lookup returns nothing. That is left visible rather than hidden: the
+escalation codes the agent needs live only in that collection, so the agent should tell
+you it cannot find them and ask.
+
+Documents belong to a separate object, the knowledge source, which demisto-sdk cannot
+author. Knowledge Center is not supported by the SDK yet, confirmed by its developers on
+2026-09-28. Creating a source is a single API call, and the same call scopes it to named
+agents instead of sharing it with every agent on the tenant. So an agent with real
+knowledge ships in two steps, not one. See AGENT_SPEC.md section 11 and the pack README.
 
 ## Licence
 
