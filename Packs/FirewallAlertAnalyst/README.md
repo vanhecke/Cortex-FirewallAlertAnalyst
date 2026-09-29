@@ -56,16 +56,18 @@ wanted.
 | `AgentixSkills/firewall-alert-triage-skill/` | the skill body plus `<action=Id>` reference tokens (AG111) |
 | `Collections/FirewallTriageWorkedAlertsCollection/` | a knowledge collection handle |
 | `Scripts/ScoreFirewallAlertScript/` | a split `.yml` + `.py` Python automation |
-| `Scripts/TriageFirewallAlertPrompt/` | `isllm: true` with `systemprompt`, `userprompt`, `model` and `promptConfig` |
+| `Scripts/TriageFirewallAlertPrompt/` | `isllm: true` with `userprompt`, and `promptConfig` carrying `modelTier` and `systemInstruction` |
 
 That covers `command`, `script`, `prompt` and `playbook`. The fifth `underlyingcontentitem`
 type, `internal`, is deliberately not shipped - see below.
 
 The escalation codes `DraftEscalationNoteAction` needs exist ONLY in the collection - not
 in the action, its fewshots, or the skill body. That is on purpose: it makes the pack a
-live test of whether collection knowledge is reachable, and on current tenants it is not.
-The agent should say it cannot find the list and ask. If it produces a code anyway, it
-invented one, and the backing script rejects it.
+live test of whether collection knowledge is reachable, and it is not, on any tenant, by
+design. The agent should say it cannot find the list and ask. If it produces a code
+anyway, it invented one, and the backing script rejects it. To make the codes genuinely
+reachable, push them as a knowledge source scoped to this agent - AGENT_SPEC.md section
+11b - not as a pack collection.
 
 ## Server constraints the SDK does not encode
 
@@ -96,29 +98,41 @@ resolves anything. And `live` is worse than useless here: it is derived from
 `state.errorCode` being empty, and since the server resolves nothing for `internal`, no
 error can ever be raised - a dead action reports healthy. Do not author `internal` actions.
 
-**A prompt (`isllm: true`) script needs a `model`.** `promptConfig` carries
-`temperature` / `maxOutputTokens` / `webSearch` but has no field naming the LLM, and the
-SDK validator is satisfied by `promptConfig` alone. Without `model` the action registers,
-reports `live`, and returns HTTP 500 when invoked.
+**A prompt (`isllm: true`) script picks its model with `promptConfig.modelTier`.** Upload
+drops a top-level `model` and `systemprompt`, and the server stores `promptConfig.model`
+but ignores it, so a prompt written that way runs on the tenant's default model with no
+system prompt. `modelTier` (`Flash`, `Thinking` or `Pro`) is the only field that changes
+the model, and `promptConfig.systemInstruction` is the only system prompt the model reads.
+With no tier the prompt still runs, on the default.
 
 **A prompt script needs exactly one output.** `'Outputs' attribute must have 1 value (52)`.
 
-**`temperature` is not accepted by every model.** The tenant's model list advertises
+**`temperature` is listed per model but not enforced.** The tenant's model list advertises
 per-model `supportedParams`: `claude-opus-4-8` takes `maxTokens` / `stopSequences` /
-`thinking` / `outputConfig` but NOT `temperature`; only `claude-sonnet-4-6` takes it.
-Setting a parameter the chosen model does not support is a 500.
+`thinking` / `outputConfig` but NOT `temperature`; only `claude-sonnet-4-6` takes it. Even
+so, a prompt setting `temperature` on the `Pro` tier ran without error on 2026-09-28.
+Whether the model honours it is unknown.
 
 **An agent using LLM-backed actions wants `InvokeLLM` in `builtinactions`.** 11 of the 14
 agents shipped on the tenant carry it; it is the only builtin they share.
 
-**A pack-carried Collection is a dangling reference.** The strict model rejects `content`,
-`body`, `documents`, `text`, `files` and `knowledge`, so a pack can only carry `name` and
-`description` - and the upload registers the id on the agent
-(`systemKnowledgeCollectionIds`) while creating no collection object:
-`GET /xsoar/agentix/knowledgecollections` returns `[]`. The agent duly calls its
-`QueryUserKnowledge` builtin and gets `references: []`. The description is NOT retrievable
-content. Real documents have to be created tenant-side; `POST /xsoar/agentix/knowledgecollection`
-is the likely route (it exists - GET returns 405). UNRESOLVED.
+**A pack-carried Collection holds no text.** The strict model rejects `content`, `body`,
+`documents`, `text`, `files` and `knowledge`, and `validate_content_path.py` permits
+exactly one file per collection folder, so a pack can carry `name` and `description` and
+nothing else. Upload does create the collection object - it appears in
+`GET /xsoar/agentix/knowledgecollections` with `status: enabled` and its `packID` set -
+but at `sizeInBytes: 0`, and the agent's `QueryUserKnowledge` gets `references: []`. The
+description is NOT retrievable content.
+
+Documents live on a different object, the knowledge source, which no pack can carry.
+`POST /xsoar/cm/agentix/knowledge` creates one, with the file passed as a JSON array of
+byte values, and scopes it to named agents through `userAgentIds` / `systemAgentIds`
+rather than sharing it with every agent on the tenant. Verified live using the same
+`DEMISTO_API_KEY` / `XSIAM_AUTH_ID` as `upload`. Full recipe in AGENT_SPEC.md section 11b.
+
+Knowledge Center is not supported by demisto-sdk yet - confirmed by the SDK developers,
+2026-09-28. So an agent with knowledge ships in two steps: `upload` for the pack, then one
+API call per document. There is no way to do it in one.
 
 **`isgeneratable: false` does not stop the agent generating the argument.** Tested live on
 `DraftEscalationNoteAction`: `escalation_code` is marked `isgeneratable: false`, and the
@@ -134,8 +148,10 @@ reported unresolved and the body ships with the literal token text. Whether the 
 does anything with the resolved form is UNVERIFIED.
 
 **You cannot read content back to check any of this.** `systemInstructions` is returned
-encrypted (`{MULAN}...`), and there is no endpoint for skills, collections or prompts -
-only `/xsoar/agentix/agents`, `/actions` and `/knowledgecollections` respond.
+encrypted (`{MULAN}...`). The endpoints that answer are `/xsoar/agentix/agents`,
+`/actions`, `/knowledgecollections` and `/knowledges`, each also under `/xsoar/cm/`;
+there is none for skills or prompts. A knowledge source reports its size, hash and bucket
+uri but never its text.
 
 **Server support varies by tenant version.** On an older tenant the prompt-backed action
 installed dead (`underlying content item ... of type [prompt] was not found`) and the

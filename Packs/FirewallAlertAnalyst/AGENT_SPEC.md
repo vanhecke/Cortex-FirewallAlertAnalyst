@@ -7,6 +7,9 @@ preparers and AG/GR validators, plus its git history - and live deploys of
 `FirewallAlertAnalyst` to Cortex XSIAM tenants. File paths below are relative to a
 demisto-sdk checkout.
 
+Section 11 was re-checked against `a6e095a90` (2026-09-18) and rewritten; the rest still
+reflects the earlier HEAD.
+
 `*` marks anything not verified end to end.
 
 ---
@@ -236,19 +239,121 @@ Token: `<action=...>`, regex `<action=([^>]+)>`
 There is no prose documentation for this token anywhere in the SDK - no `.md`, no
 CHANGELOG entry. The above is read off source and tests.
 
-## 11. Collection
+## 11. Knowledge: Collection vs knowledge source
+
+Two server objects, easily confused. Only one holds text, and the SDK authors only the
+other.
+
+| | Collection | Knowledge source |
+| --- | --- | --- |
+| Pack dir | `Collections/<Id>/<Id>.yml` | none |
+| Server name | `agentixknowledgecollection` | - |
+| List endpoint | `/xsoar/agentix/knowledgecollections` | `/xsoar/cm/agentix/knowledges` |
+| Carries text | no | yes |
+| Agent binding | agent `collectionids` | source `userAgentIds` / `systemAgentIds` |
+| Authorable in a pack | yes | **no** |
+
+### 11a. Collection
 
 Schema `common/schemas/collection.yml`. Required: `commonfields.id`/`.version`, `name`.
 Optional: `description`, `fromversion`, `toversion`, `marketplaces`, `supportedModules`,
-per-marketplace `name:<mp>` / `description:<mp>`.
+`supportedFeatures`, per-marketplace `name:<mp>` / `description:<mp>`.
 
-There is **no** content, body, documents, text, files or knowledge field. A pack-carried
-collection is a dangling reference: upload registers the id on the agent
-(`systemKnowledgeCollectionIds`) but creates no collection object -
-`GET /xsoar/agentix/knowledgecollections` returns `[]` and the agent's `QueryUserKnowledge`
-returns `references: []`. The `description` is not retrievable content. Documents must be
-created tenant-side; `POST /xsoar/agentix/knowledgecollection` is the likely route (it
-exists - GET returns 405).* UNRESOLVED.
+No content, body, documents, text, files or knowledge field exists, and
+`scripts/validate_content_path.py` permits exactly one file per collection folder,
+`<Id>.yml`. Contrast `AgentixSkills/`, which also permits `<Id>_skill.md`. There is
+nowhere to put a document.
+
+Upload does create the object. `GET /xsoar/agentix/knowledgecollections` returns it with
+`status: enabled` and `packID` set. It arrives `sizeInBytes: 0` and stays there.
+`description` is metadata, not retrievable content, so an agent whose only knowledge is a
+pack collection gets `references: []` from `QueryUserKnowledge`.
+
+Agent binding does work. `collectionids` is renamed to `systemknowledgecollectionids` at
+prepare-upload (`prepare_content/agentix_markdown_unifier.py`) and the server keeps it per
+agent - verified live, one collection on 1 of 15 agents.
+
+### 11b. Knowledge source
+
+The object that carries text. API only: no content type, no pack directory, no SDK
+support, and tenant-side sources report `packID: ""`.
+
+```
+POST   /xsoar/cm/agentix/knowledge          create and update
+GET    /xsoar/cm/agentix/knowledges         list
+GET    /xsoar/cm/agentix/knowledges/<id>    one
+DELETE /xsoar/cm/agentix/knowledges/<id>    delete
+```
+
+`DEMISTO_API_KEY` + `XSIAM_AUTH_ID` authenticate all of these on the `api-<tenant>` host;
+no browser session is needed. The `/xsoar/cm/` prefix is what the Knowledge Center UI
+uses. `/xsoar/agentix/knowledges` answers the reads too. The UI host
+(`<tenant>.xdr.<region>...`, no `api-` prefix) rejects API-key auth with a 303 to
+`/login`.
+
+Create body, verified live:
+
+```json
+{"sourceType": "FILE",
+ "name": "worked-alerts.md",
+ "contentType": "text/markdown",
+ "sharedWithAllAgents": false,
+ "userAgentIds": ["firewall-alert-analyst-agent"],
+ "systemAgentIds": [],
+ "periodicSync": false,
+ "sourceDetails": {"datasource": null, "instanceName": null, "args": {}},
+ "file": [35, 32, 87, 111, 114, 107, 101, 100]}
+```
+
+| Field | Note |
+| --- | --- |
+| `file` | the document as a JSON array of byte values, ie `list(path.read_bytes())`. Multipart is rejected 415 on every route, so JSON is the only way in |
+| `sourceType` | uppercase `FILE`. Lowercase `file`, and `TEXT`/`INLINE`/`URL`/`RAW`/`STRING`, all fail `Invalid SourceType (101803)` |
+| `contentType` | lowercase, eg `text/markdown` |
+| `name` | the filename, extension included; the server derives the stored object's suffix from it |
+| `uri`, `fileHash`, `contentSizeInBytes` | server-controlled. Sending them is silently ignored |
+
+`processingStatus` goes `processing` -> `ready` within a few seconds. On `ready` the object
+gains `contentSizeInBytes`, `fileHash` and a bucket `uri`. Omit the `file` bytes and it
+settles on `error` with size 0 - that is the only failure signal; the POST still returns
+200.
+
+Scoping lives on the source, not on the agent:
+
+| Source field | Agent field it populates |
+| --- | --- |
+| `userAgentIds` | `userKnowledgeSourceIds` |
+| `systemAgentIds` | `systemKnowledgeSourceIds` |
+| `sharedWithAllAgents: true` | both, on every agent |
+
+Verified live: `sharedWithAllAgents: false` with one id in `userAgentIds` reached 1 of 15
+agents; a source with `true` reached 15 of 15. Both id lists are omitted from GET
+responses when empty, which is why they are invisible until you set them.
+
+The UI writes `userAgentIds` and leaves `systemAgentIds` empty for a scoped source. What
+the runtime does differently with user versus system knowledge at query time is documented
+nowhere.* Only the binding was tested here, not whether a scoped source is actually
+retrieved mid-conversation.*
+
+### 11c. Consequence for packs
+
+An agent that needs real knowledge cannot ship complete. The pack carries the agent and,
+optionally, an empty collection handle; the document is a separate API call keyed to the
+agent's id.
+
+**Knowledge Center is not supported by demisto-sdk yet.** Confirmed by the SDK developers,
+2026-09-28. There is no work-in-progress content type to adopt, and the Collection item is
+not a partial implementation of one. Do not expect `upload` to carry a document, and do
+not design a pack around it arriving soon.
+
+The source agrees. As of `a6e095a90` (2026-09-18), `git log -S` finds no content field on
+Collection anywhere in the repo history, and the only change to the collection files since
+the type was added (#5393, 2026-06-11) is the optional `supportedFeatures` list (#5508,
+2026-09-17).
+
+Until that changes, shipping an agent with knowledge is two steps: `demisto-sdk upload`
+for the pack, then one `POST /xsoar/cm/agentix/knowledge` per document, scoped with
+`userAgentIds` to the agent ids the pack just uploaded.
 
 ## 12. Backing scripts
 
@@ -265,18 +370,23 @@ Prompt script (`isllm: true`), model `strict_objects/script.py`:
 | `marketplaces: [platform]` mandatory | AG101 |
 | if `isllm: false`, all of `model`/`userprompt`/`systemprompt`/`fewshots`/`promptConfig` must be empty | strict object |
 
-`promptConfig`: `temperature`, `maxOutputTokens`, `webSearch`. Note `fewshots` on a script
-is a **string**; on an action it is a list of strings.
+`promptConfig`: `temperature`, `maxOutputTokens`, `webSearch`, and `modelTier`
+(`Flash`/`Thinking`/`Pro`, SDK 1.39.7 onwards). The server also reads `systemInstruction`,
+which the 1.39.9 strict `PromptConfig` does not list. Note `fewshots` on a script is a
+**string**; on an action it is a list of strings.
 
-Server rules the SDK does not encode, all verified live:
+Server rules the SDK does not encode, all verified live. The model and system prompt rules
+were checked on 2026-09-28 by reading prompts back from `GET /xsoar/cm/aiTask/<id>` and
+running them through a `type: prompt` action:
 
-- `model` is mandatory in practice. `promptConfig` names no LLM, and the validator accepts
-  `promptConfig` alone. Without `model` the action registers, reports `live`, and returns
-  HTTP 500 on invoke.
+- Only `promptConfig.modelTier` picks the model. Upload drops a top-level `model` (stored
+  `null`), and `promptConfig.model` is stored but ignored at runtime. With no tier the
+  prompt runs on the tenant default, with no error.
+- Upload drops a top-level `systemprompt`. `promptConfig.systemInstruction` reaches the
+  model, although GET returns it as `{MULAN}`.
 - Exactly one output required: `'Outputs' attribute must have 1 value (52)`.
-- `temperature` is rejected by models that do not list it in `supportedParams`.
-  `claude-opus-4-8` takes `maxTokens`/`stopSequences`/`thinking`/`outputConfig` but not
-  `temperature`; `claude-sonnet-4-6` takes it. Wrong param = HTTP 500.
+- `temperature` is not enforced. `claude-opus-4-8` does not list it in `supportedParams`
+  (`claude-sonnet-4-6` does), yet a prompt setting it on the `Pro` tier ran without error.
 
 ## 13. Validators
 
@@ -333,9 +443,12 @@ no `dockerimage`).
 ## 14. Other server behaviour
 
 - Content cannot be read back to verify. `systemInstructions` returns encrypted
-  (`{MULAN}...`), and only `/xsoar/agentix/agents`, `/actions` and
-  `/knowledgecollections` respond - there is no endpoint for skills, collections or
-  prompts.
+  (`{MULAN}...`). The agentix endpoints that answer are `/agents`, `/actions`,
+  `/knowledgecollections` and `/knowledges`, each also under the `/xsoar/cm/` prefix;
+  `/skills` and `/prompts` 303 to `/#/404`. A prompt reads back from
+  `/xsoar/cm/aiTask/<id>` instead. A knowledge source exposes `uri`, `fileHash`
+  and `contentSizeInBytes` but no readable content field either, so the uploaded document
+  is write-only over the API.
 - Support varies by tenant version. On an older tenant a prompt-backed action installed
   dead (`underlying content item ... of type [prompt] was not found`) and the agent object
   carried no `skillIds` or `systemKnowledgeCollectionIds` at all.

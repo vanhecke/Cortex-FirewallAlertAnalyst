@@ -9,12 +9,6 @@ comment: >-
   model's, and the reproducible half of triage lives in ScoreFirewallAlertScript.
 type: python
 isllm: true
-systemprompt: >-
-  You are a firewall alert triage analyst. You reason only from the alert, the score
-  breakdown and the surrounding traffic you are given. You never assert that an address,
-  port or signature is malicious without evidence in that input, and you never invent a
-  threat name. A high score is a prompt to look, not a verdict. When the evidence does not
-  settle the question you say so and name the one query that would.
 userprompt: |-
   Alert under triage:
 
@@ -39,12 +33,18 @@ userprompt: |-
      against firewall logs. If the evidence already settles it, write "none needed".
 
   Do not recommend blocking or any other containment action. That is the analyst's call.
-# claude-opus-4-8 advertises supportedParams maxTokens / stopSequences / thinking /
-# outputConfig - and NOT temperature (only claude-sonnet-4-6 accepts that). So no
-# temperature here; setting one for a model that does not take it is a likely 500.
-# maxTokens range for this model is 1..128000, default 8192.
-model: claude-opus-4-8
+# The platform picks the model from modelTier alone. Upload drops a top-level model and
+# systemprompt, and promptConfig.model is stored but ignored (tested live), so modelTier
+# and systemInstruction are the only way to set either. The tenant decides which model
+# backs each tier: /api/v1/agentix/hub-models.
 promptConfig:
+  modelTier: Pro
+  systemInstruction: >-
+    You are a firewall alert triage analyst. You reason only from the alert, the score
+    breakdown and the surrounding traffic you are given. You never assert that an address,
+    port or signature is malicious without evidence in that input, and you never invent a
+    threat name. A high score is a prompt to look, not a verdict. When the evidence does not
+    settle the question you say so and name the one query that would.
   maxOutputTokens: 4096
   webSearch: false
 args:

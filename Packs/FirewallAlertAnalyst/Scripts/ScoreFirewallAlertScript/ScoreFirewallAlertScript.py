@@ -44,14 +44,14 @@ def score_alert(alert, baseline_days):
     action = str(alert.get("action", "")).lower()
     if action == "deny":
         score += WEIGHTS["action_deny"]
-        reasons.append("action=deny (+%d)" % WEIGHTS["action_deny"])
+        reasons.append(f"action=deny (+{WEIGHTS['action_deny']})")
     elif action in ("reset", "reset-both", "drop"):
         score += WEIGHTS["action_reset"]
-        reasons.append("action=%s (+%d)" % (action, WEIGHTS["action_reset"]))
+        reasons.append(f"action={action} (+{WEIGHTS['action_reset']})")
 
     if _is_external(alert.get("src_ip")):
         score += WEIGHTS["external_source"]
-        reasons.append("source is external (+%d)" % WEIGHTS["external_source"])
+        reasons.append(f"source is external (+{WEIGHTS['external_source']})")
 
     try:
         port = int(alert.get("dst_port") or 0)
@@ -59,7 +59,7 @@ def score_alert(alert, baseline_days):
         port = 0
     if port in ADMIN_PORTS:
         score += WEIGHTS["admin_port"]
-        reasons.append("destination port %d is an admin service (+%d)" % (port, WEIGHTS["admin_port"]))
+        reasons.append(f"destination port {port} is an admin service (+{WEIGHTS['admin_port']})")
 
     try:
         num_bytes = int(alert.get("bytes") or 0)
@@ -67,7 +67,7 @@ def score_alert(alert, baseline_days):
         num_bytes = 0
     if num_bytes > HIGH_BYTES:
         score += WEIGHTS["high_byte_count"]
-        reasons.append("transfer above %d bytes (+%d)" % (HIGH_BYTES, WEIGHTS["high_byte_count"]))
+        reasons.append(f"transfer above {HIGH_BYTES} bytes (+{WEIGHTS['high_byte_count']})")
 
     try:
         prior = int(alert.get("prior_hits") or 0)
@@ -75,14 +75,11 @@ def score_alert(alert, baseline_days):
         prior = 0
     if prior > 0:
         score += WEIGHTS["repeat_offender"]
-        reasons.append(
-            "source seen %d time(s) in the last %d days (+%d)"
-            % (prior, baseline_days, WEIGHTS["repeat_offender"])
-        )
+        reasons.append(f"source seen {prior} time(s) in the last {baseline_days} days (+{WEIGHTS['repeat_offender']})")
 
     if alert.get("threat_id") or alert.get("signature"):
         score += WEIGHTS["threat_signature"]
-        reasons.append("carries a threat signature (+%d)" % WEIGHTS["threat_signature"])
+        reasons.append(f"carries a threat signature (+{WEIGHTS['threat_signature']})")
 
     score = min(score, 100)
     if score >= 70:
@@ -105,7 +102,7 @@ def main():
     try:
         alert = json.loads(raw) if isinstance(raw, str) else raw
     except ValueError as exc:
-        return_error("alert is not valid JSON: %s" % exc)
+        return_error(f"alert is not valid JSON: {exc}")
         return
     if not isinstance(alert, dict):
         return_error("alert must be a JSON object describing ONE alert")
@@ -127,11 +124,8 @@ def main():
     if argToBoolean(args.get("debug") or False):
         outputs["raw_debug"] = json.dumps({"weights": WEIGHTS, "alert": alert}, sort_keys=True)
 
-    readable = "### Firewall alert score\n**%d / 100 (%s)**\n\n%s" % (
-        score,
-        band,
-        "\n".join("- %s" % r for r in reasons),
-    )
+    bullets = "\n".join(f"- {r}" for r in reasons)
+    readable = f"### Firewall alert score\n**{score} / 100 ({band})**\n\n{bullets}"
     return_results(
         CommandResults(
             outputs_prefix="FirewallAlert.Score",
