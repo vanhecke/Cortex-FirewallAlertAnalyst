@@ -590,13 +590,15 @@ XSIAM 4.0, verified on 2026-11-04:
 - **Uninstall is unreliable.** The first `POST /xsoar/contentpacks/installed/delete`,
   sent about 5 minutes after install, returned `200 {}` and did nothing for over 10
   minutes. The same request sent again removed the pack, agent and actions within 50
-  seconds. Poll `/xsoar/contentpacks/metadata/installed` and resend if needed.
+  seconds. On 2026-11-05 the first request worked, within 40 seconds, so the drop is
+  intermittent. Poll `/xsoar/contentpacks/metadata/installed` and resend if needed.
 - **Uninstall leaves the knowledge collection behind.** It stays as `isSystem: true` with
   the old `packID`, and `DELETE /xsoar/cm/agentix/knowledgecollections/<id>` refuses with
   `Item is system and cannot be modified (100001)`. A collection from a removed probe pack
-  sits on an 8.15 tenant the same way. Reusing the id in a later pack
-  install presumably takes it over again.* Do not put anything in a test collection's
-  description that you would not want left on the tenant.
+  sits on an 8.15 tenant the same way. A later install of a pack carrying the same
+  id takes it over again: on 2026-11-05 the leftover took the new `itemVersion` and
+  `modified`. Do not put anything in a test collection's description that you would
+  not want left on the tenant.
 
 ## 15. Reference implementation
 
