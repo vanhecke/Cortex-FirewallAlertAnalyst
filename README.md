@@ -31,11 +31,15 @@ It ships seven actions covering four `underlyingcontentitem` types:
 | Draft Escalation Note | `script` | the `isgeneratable` split |
 | Block IP | `playbook` | wraps `Block IP - Generic v3` |
 
-Plus one skill, one knowledge collection, and an evaluator test per action.
+Plus one skill, one knowledge collection, and an evaluator test per action. Verified on
+Cortex XSIAM 4.0 (server 8.16) with demisto-sdk 1.39.13, including the 4.0 additions: an
+MCP server declared on the agent (`mcps`), a binding to Palo Alto's managed
+`cortex-platform-docs` knowledge, and a long-running action.
 
 ## Using it
 
-Requires [demisto-sdk](https://github.com/demisto/demisto-sdk) and a Cortex XSIAM tenant.
+Requires [demisto-sdk](https://github.com/demisto/demisto-sdk) 1.39.13 or later and a Cortex
+XSIAM tenant (4.0 for the managed knowledge binding).
 
 ```bash
 export DEMISTO_BASE_URL="https://api-<tenant>.xdr.<region>.paloaltonetworks.com"
@@ -55,6 +59,9 @@ To remove it again (asynchronous, ~1 minute):
 ```
 POST /xsoar/contentpacks/installed/delete   {"IDs": ["FirewallAlertAnalyst"]}
 ```
+
+On XSIAM 4.0 the first request can be silently dropped, so check the installed packs and
+send it again if needed. Uninstall leaves the knowledge collection behind as a system item.
 
 ## What it depends on
 

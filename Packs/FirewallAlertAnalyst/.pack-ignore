@@ -1,2 +1,2 @@
 [file:TriageFirewallAlertPrompt.yml]
-ignore=DO104
+ignore=DO104,ST110

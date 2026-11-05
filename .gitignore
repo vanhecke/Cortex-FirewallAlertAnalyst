@@ -8,3 +8,4 @@ __pycache__/
 # demisto-sdk build output
 .demisto-sdk/
 *.zip
+build/

@@ -7,7 +7,14 @@
 # validators that fetch approved_categories.json / approved_usecases.json and abort
 # with "you may not be running validate from the content directory".
 #
-# So: the SDK's 15 defaults, plus the agentix rules that work on a standalone pack.
+# So: the SDK's 15 defaults, plus the agentix rules that work on a standalone pack, plus
+# ST110, the strict-schema check. Without ST110 an unknown field passes silently: the
+# demisto-sdk 1.39.13 rename of collectionids to knowledgeids went unnoticed until it was
+# selected. ST110 is listed as ignorable for one reason only: TriageFirewallAlertPrompt
+# sets promptConfig.systemInstruction, which the server honours but the strict
+# PromptConfig model does not list. Its .pack-ignore entry is the only ST110 exception.
+#
+# Targets demisto-sdk 1.39.13.
 #
 # Deliberately NOT selected:
 #   AG100  forbidden-content list, resolved against the remote content repo
@@ -22,6 +29,7 @@
 #          it raises rather than failing the item.
 ignorable_errors = [
   "AG112",
+  "ST110",
   "DO104",
   "AG117",
   "BA101",
@@ -60,6 +68,7 @@ select = [
   "AG115",
   "AG117",
   "AG118",
+  "ST110",
   "BA101",
   "BA105",
   "BA106",
@@ -93,6 +102,7 @@ select = [
   "AG115",
   "AG117",
   "AG118",
+  "ST110",
   "BA101",
   "BA105",
   "BA106",
