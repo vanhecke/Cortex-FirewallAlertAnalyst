@@ -7,10 +7,36 @@ preparers and AG/GR validators, plus its git history - and live deploys of
 `FirewallAlertAnalyst` to Cortex XSIAM tenants. File paths below are relative to a
 demisto-sdk checkout.
 
-Section 11 was re-checked against `a6e095a90` (2026-09-18) and rewritten; the rest still
-reflects the earlier HEAD.
+Section 11 was re-checked against `a6e095a90` (2026-09-18) and rewritten. On 2026-11-04 the
+whole spec was re-checked against **demisto-sdk 1.39.13** and a live deploy to a **Cortex
+XSIAM 4.0** tenant (server 8.16.0); see section 0 for what changed.
 
 `*` marks anything not verified end to end.
+
+---
+
+## 0. XSIAM 4.0 and demisto-sdk 1.39.13
+
+XSIAM 4.0 (server 8.16.0, November 2026, alongside Agentix 1.5) and demisto-sdk 1.39.13
+(2026-10-20). Verified by deploying this pack to a 4.0 tenant on 2026-11-04, then
+uninstalling it.
+
+| Change | Where | Section |
+| --- | --- | --- |
+| `Collections/` is now `Knowledge/`, and the agent field `collectionids` is now `knowledgeids`. The server field is unchanged (`systemknowledgecollectionids`) | SDK 1.39.13 | 1, 2, 4, 11 |
+| Agents can declare MCP servers natively: `mcps: [{server_url: ...}]`. Stored on 4.0 | SDK 1.39.9, 4.0 | 4, 16 |
+| Actions can be long-running: `islongrunning`, `longrunningtimeoutseconds`. Stored on 4.0 | SDK 1.39.9, 4.0 | 5 |
+| `display` on an agent was never in the schema; ST110 rejects it | SDK | 4 |
+| ST110 (strict schema) must be selected, or renamed and unknown fields pass silently | SDK | 13 |
+| `zip-packs` builds for the xsoar marketplace and drops every agent item; build with `prepare-content -mp platform` | SDK | 13 |
+| Palo Alto ships 10 managed knowledge collections. A pack agent can bind one by id (`cortex-platform-docs`); stored on 4.0 | 4.0 | 11d |
+| 47 `_builtin_` action handlers (6 on 8.15), stored as `type: command`, not `internal` | 4.0 | 9 |
+| Knowledge-source binding is unchanged: `userAgentIds` on the source fills `userKnowledgeSourceIds` on the agent | 4.0 | 11b |
+| Uninstall can drop the first request, and leaves pack knowledge collections behind as undeletable system items | 4.0 | 14 |
+
+Unchanged on 4.0, re-verified: all seven actions install live (prompt and playbook
+included), prompt `modelTier` and `systemInstruction` are kept, `systemInstructions` still
+reads back encrypted, and `/skills` still has no endpoint.
 
 ---
 
@@ -22,10 +48,14 @@ reflects the earlier HEAD.
 | AgentixAction | `AgentixActions/` | `agentixaction` | yes |
 | AgentixActionTest | `AgentixActions/` | - | **no** (`CONTENT_TYPES_EXCLUDED_FROM_UPLOAD`) |
 | AgentixSkill | `AgentixSkills/` | `agentixskill` | yes |
-| Collection | `Collections/` | `agentixknowledgecollection` | yes (name/description only, see 11) |
+| Knowledge | `Knowledge/` | `agentixknowledgecollection` | yes (name/description only, see 11) |
 | Script | `Scripts/` | `automation` | yes |
 
-Release-note headers: `Agents`, `Actions`, `Skills`, `Collections`.
+Release-note headers: `Agents`, `Actions`, `Skills`, `Knowledge`.
+
+demisto-sdk 1.39.12 and earlier call the Knowledge type `Collection`, in `Collections/`,
+with release-note header `Collections`. A pack written for one side of that rename does
+not validate on the other. The server type and stored object are the same either way.
 
 ## 2. File layout
 
@@ -34,11 +64,12 @@ Packs/<Pack>/
   pack_metadata.json
   AgentixAgents/<AgentId>/<AgentId>.yml
                           <AgentId>_systeminstructions.md   MANDATORY (AG110)
+                          <AgentId>_test.yml                optional, never parsed (1.39.13)
   AgentixActions/<ActionId>/<ActionId>.yml
                             <ActionId>_test.yml             MANDATORY (AG118)
   AgentixSkills/<SkillId>/<SkillId>.yml
                           <SkillId>_skill.md                MANDATORY (AG111)
-  Collections/<CollectionId>/<CollectionId>.yml
+  Knowledge/<KnowledgeId>/<KnowledgeId>.yml                 (Collections/ before 1.39.13)
   Scripts/<ScriptId>/<ScriptId>.yml [+ <ScriptId>.py]
 ```
 
@@ -79,7 +110,8 @@ Schema `common/schemas/agentixagent.yml`.
 | `systeminstructions` | no | `""`; filled from the `.md`. Max 65535 **bytes** (AG109) |
 | `actionids` | no | AgentixAction ids |
 | `skillids` | no | AgentixSkill ids |
-| `collectionids` | no | Collection ids |
+| `knowledgeids` | no | Knowledge ids; may name a Palo Alto managed collection (11d). `collectionids` before 1.39.13 |
+| `mcps` | no | list of `{server_url: <url>}` (1.39.9+). See 16 |
 | `builtinactions` | no | platform capability names, see 9 |
 | `conversationstarters` | no | list of strings |
 | `autoenablenewactions` | no | bool |
@@ -87,6 +119,11 @@ Schema `common/schemas/agentixagent.yml`.
 | `category`, `tags` | no | AG102 constrains `category` |
 | `marketplaces` | no | must be `[platform]` (AG101) |
 | `supportedModules` | no | `[agentix]` |
+| `supportedFeatures`, `excludefromtightlycoupled` | no | 1.39.10+; not exercised here |
+
+There is no `display` field on an agent. It is not in the schema, ST110 rejects it, and the
+server stores only `name`. (Actions do have `display`.) Every field above was read back
+from a 4.0 tenant after upload, `mcps` and both `knowledgeids` entries included.
 
 Total agent context <= 200000 chars (GR116): agent name + description + system
 instructions + conversation starters, plus name + description of every registered action,
@@ -108,7 +145,14 @@ Schema `common/schemas/agentixaction.yml`.
 | `requiresuserapproval` | no | bool |
 | `fewshots` | no | **list of strings**; not counted by AG112 |
 | `internal` | no | bool, hides from UI/API - unrelated to `underlyingcontentitem.type: internal` |
+| `islongrunning` | no | bool (1.39.9+). Stored as `isLongRunning` |
+| `longrunningtimeoutseconds` | no | int (1.39.9+). Stored as `longRunningTimeoutSeconds` |
 | `marketplaces` | no | `[platform]` (AG101) |
+
+Long-running actions are new in XSIAM 4.0. The tenant's only built-in one is
+`CortexIngestLogs` at 3600 seconds. `BlockIpAction` here sets `true` / 1800, because its
+playbook waits on a human verification step. Both fields read back as set. What the
+runtime does differently for a long-running action is undocumented.*
 
 `args[]`: `name`, `description`, `type` required; optional `required`, `defaultvalue`
 (string), `hidden`, `disabled`, `isgeneratable`, `underlyingargname`.
@@ -218,6 +262,16 @@ Two distinct mechanisms, easily confused:
 
 You cannot add a builtin handler from a pack.
 
+**XSIAM 4.0.** The PANW agents carry only `InvokeLLM` (11 of 12). A pack agent's
+`CortexRunXQLQuery` was still accepted and stored. The `_builtin_` handlers grew from 6 to
+47, and the server now stores them as `type: command` with `id`/`name: _builtin_`, not as
+`type: internal`. Among the new ones: `listIssues`, `updateIssue`, `createWarRoomEntry`,
+`getEndpoints`, `isolateEndpoint`, `runPlaybook`, `runScriptAgentix`, `getAgentixAgents`
+and `createAgentixAgent`. `listIssues` reads issues; still no builtin reads a case. Agents
+built in the UI bind these heavily (up to 23 on one agent). A pack agent can list the
+action ids in `actionids` the same way as the MCP ids in 16.* The ids are tenant-side,
+so read them from `GET /xsoar/cm/agentix/actions` first.
+
 ## 10. Skill action reference tokens
 
 Token: `<action=...>`, regex `<action=([^>]+)>`
@@ -239,23 +293,25 @@ Token: `<action=...>`, regex `<action=([^>]+)>`
 There is no prose documentation for this token anywhere in the SDK - no `.md`, no
 CHANGELOG entry. The above is read off source and tests.
 
-## 11. Knowledge: Collection vs knowledge source
+## 11. Knowledge: knowledge collection vs knowledge source
 
 Two server objects, easily confused. Only one holds text, and the SDK authors only the
-other.
+other. demisto-sdk 1.39.13 renamed the pack type from Collection to Knowledge; the server
+still calls it a knowledge collection.
 
-| | Collection | Knowledge source |
+| | Knowledge collection | Knowledge source |
 | --- | --- | --- |
-| Pack dir | `Collections/<Id>/<Id>.yml` | none |
+| Pack dir | `Knowledge/<Id>/<Id>.yml` (`Collections/` before 1.39.13) | none |
 | Server name | `agentixknowledgecollection` | - |
 | List endpoint | `/xsoar/agentix/knowledgecollections` | `/xsoar/cm/agentix/knowledges` |
-| Carries text | no | yes |
-| Agent binding | agent `collectionids` | source `userAgentIds` / `systemAgentIds` |
+| Carries text | no (pack-made); not readable (managed, 11d) | yes |
+| Agent binding | agent `knowledgeids` (`collectionids` before 1.39.13) | source `userAgentIds` / `systemAgentIds` |
 | Authorable in a pack | yes | **no** |
 
-### 11a. Collection
+### 11a. Knowledge collection
 
-Schema `common/schemas/collection.yml`. Required: `commonfields.id`/`.version`, `name`.
+Schema `common/schemas/knowledge.yml` (`collection.yml` before 1.39.13), unchanged apart
+from the name and an optional `supportedFeatures`. Required: `commonfields.id`/`.version`, `name`.
 Optional: `description`, `fromversion`, `toversion`, `marketplaces`, `supportedModules`,
 `supportedFeatures`, per-marketplace `name:<mp>` / `description:<mp>`.
 
@@ -269,9 +325,15 @@ Upload does create the object. `GET /xsoar/agentix/knowledgecollections` returns
 `description` is metadata, not retrievable content, so an agent whose only knowledge is a
 pack collection gets `references: []` from `QueryUserKnowledge`.
 
-Agent binding does work. `collectionids` is renamed to `systemknowledgecollectionids` at
-prepare-upload (`prepare_content/agentix_markdown_unifier.py`) and the server keeps it per
-agent - verified live, one collection on 1 of 15 agents.
+Agent binding does work. `knowledgeids` (`collectionids` before 1.39.13) is renamed to
+`systemknowledgecollectionids` at prepare-upload
+(`prepare_content/agentix_markdown_unifier.py`) and the server keeps it per agent -
+verified live on 8.15 and again on 4.0.
+
+1.39.13's `prepare-content` writes the item to `Collections/agentixknowledgecollection-<Id>.yml`
+inside the zip, the server's folder name. It then logs `Could not determine content type`
+for that path while writing metadata. The item is still in the zip and in
+`metadata.json`, and installs. The error is noise.
 
 ### 11b. Knowledge source
 
@@ -335,6 +397,12 @@ the runtime does differently with user versus system knowledge at query time is 
 nowhere.* Only the binding was tested here, not whether a scoped source is actually
 retrieved mid-conversation.*
 
+**Unchanged on XSIAM 4.0.** The same create body, posted on 2026-11-04, reached `ready` in
+about 3 seconds. The source kept `userAgentIds`, and the agent gained
+`userKnowledgeSourceIds: [<source id>]`. On a 4.0 tenant where no source is scoped to any
+agent, neither field appears anywhere. That looks like a removal, but it is only the
+omit-when-empty rule above.
+
 ### 11c. Consequence for packs
 
 An agent that needs real knowledge cannot ship complete. The pack carries the agent and,
@@ -354,6 +422,35 @@ the type was added (#5393, 2026-06-11) is the optional `supportedFeatures` list 
 Until that changes, shipping an agent with knowledge is two steps: `demisto-sdk upload`
 for the pack, then one `POST /xsoar/cm/agentix/knowledge` per document, scoped with
 `userAgentIds` to the agent ids the pack just uploaded.
+
+Still true in 1.39.13: the rename to Knowledge added no content field, and
+`validate_content_path.py` still allows exactly `Knowledge/<Id>/<Id>.yml`.
+
+### 11d. Managed knowledge collections (XSIAM 4.0)
+
+A 4.0 tenant carries ten knowledge collections that Palo Alto manages: `managed: true`,
+`source: agentix`, `isSystem: true`, `fromServerVersion: 8.16.0`, each from a pack named
+`AgentixKnowledge_<id>`. Those packs are not in demisto/content, and the tenant's
+marketplace endpoints do not show them.
+
+| id | Scope (from its description) |
+| --- | --- |
+| `cortex-platform-docs` | platform concepts: data model, assets, issues, cases, security graph. Bound to 11 of the 12 built-in agents (not help-center) and to 45 UI-built ones on the test tenant |
+| `tac-docs` | TAC guides for XDR/XSIAM endpoint issues and per-integration troubleshooting. Bound to help-center |
+| `cwp-knowledge` | Cloud Posture (CWP): inventory, onboarding, scanning. Bound to cloud-posture |
+| `aispm-knowledge`, `dspm-knowledge`, `ciem-identity-knowledge` | AI, data and identity security posture |
+| `p2xql-docs-md`, `p2xql-docs-docx`, `p2xql-examples` | XQL reference and worked natural-language-to-XQL examples |
+| `visualization-knowledge` | json-render visualizations |
+
+Unlike a pack collection, these clearly carry content: the built-in agents answer from
+them. But it is not readable over the API. The record holds only a routing description of
+300-560 characters, `sizeInBytes` is 0, and every document, file, download and export path
+returns 404.
+
+**A pack agent can bind one by id.** `knowledgeids: [cortex-platform-docs]` uploaded
+cleanly and read back in `systemKnowledgeCollectionIds`. Nothing checks that the id
+resolves, which is the same as for the MCP action ids in 16. Whether the agent actually
+retrieves from it mid-conversation is untested.* The ids exist only on 4.0 tenants.
 
 ## 12. Backing scripts
 
@@ -388,6 +485,16 @@ running them through a `type: prompt` action:
 - `temperature` is not enforced. `claude-opus-4-8` does not list it in `supportedParams`
   (`claude-sonnet-4-6` does), yet a prompt setting it on the `Pro` tier ran without error.
 
+Re-checked on XSIAM 4.0 through `GET /xsoar/cm/aiTask/<id>`: `modelTier: Pro` is kept,
+`systemInstruction` is kept (encrypted), there is one output, and `model` is `null`. The 4.0
+docs map the tiers as Flash = Gemini 3.5 Flash, Thinking = Claude Sonnet 4.6 and Pro =
+Claude Opus 4.8.
+
+The strict `PromptConfig` still does not list `systemInstruction` in 1.39.13, so ST110
+fails a prompt that uses it. Keep the field, because it is the only system prompt the model
+reads. Mark ST110 ignorable in the validate config and add a per-file `.pack-ignore` entry
+(`ignore=DO104,ST110`), so the exception covers that one file and nothing else.
+
 ## 13. Validators
 
 All are errors unless listed as warning. "Graph" = needs a populated content graph, so
@@ -419,8 +526,17 @@ All are errors unless listed as warning. "Graph" = needs a populated content gra
 | GR112 | No duplicate action `name` in the repo | yes | yes |
 | GR115 | Action `name` change requires a dependent-skill release note | yes | yes |
 | GR116 | Agent total context <= 200000 chars | yes | yes |
+| GR117 | No duplicate action `id` (1.39.13) | yes | yes |
+| GR118 | No cross-destination dependency (1.39.13)* | yes | yes |
+| ST110 | Item matches its strict model: no unknown or renamed fields | yes | no |
 
 AG112 and AG117 are in the SDK's `ignorable_errors`, so `.pack-ignore` can silence them.
+
+**Select ST110.** It is the only rule that notices a field the SDK no longer knows. Under
+1.39.13 an agent still carrying `collectionids` passes every AG rule. The 1.39.13 unifier
+renames only `knowledgeids`, so the binding would not reach the server under its
+server name. An agent with `display` passes the AG rules too. ST110 reports both as
+`value_error.extra`.
 
 **Run `validate` with a config or it checks nothing.** The SDK's `default_config.toml`
 selects 15 codes and **no** AG or GR rule at all, so an unconfigured run leaves the agent,
@@ -434,7 +550,8 @@ This repo therefore ships its own `validation_config.toml` at the root:
 demisto-sdk validate -i Packs/FirewallAlertAnalyst --config-path validation_config.toml
 ```
 
-It selects AG101, AG103-AG111, AG114, AG115, AG117 and AG118. Deliberately not selected:
+It targets demisto-sdk 1.39.13 and selects AG101, AG103-AG111, AG114, AG115, AG117, AG118
+and ST110. Deliberately not selected:
 AG100 and AG102 (need a remote fetch), AG112 (character budgets - enable it if your skill
 bodies are hand-written), AG116 and all GR rules (need a populated content graph, which
 `upload` does not build), and DO104 (raises rather than fails on prompt scripts, which have
@@ -458,6 +575,29 @@ no `dockerimage`).
 - Ids are identity. Renaming an id creates a new object and orphans the old one; uninstall
   the pack before re-uploading renamed content.
 
+XSIAM 4.0, verified on 2026-11-04:
+
+- **Build with `prepare-content -mp platform`.** `zip-packs` has no marketplace option and
+  builds for `xsoar`, which drops every agent item without a word. `demisto-sdk
+  prepare-content -i Packs/<Pack> -o <dir> -mp platform` writes an installable
+  `<dir>/<Pack>.zip`. Create `<dir>` first: if it does not exist, the zip is written to
+  `<dir>.zip` instead. `demisto-sdk upload -i <Pack>.zip` sends a zip as-is, so an older SDK can
+  upload a zip that 1.39.13 built.
+- **Detail beats list.** `GET /agents/<id>` and `/actions/<id>` return fields the list
+  omits: `systemInstructions` (still `{MULAN}`-encrypted), `builtinActions`, `skillIds` and
+  `managed`. Agents built in the web UI store their prompt in `customInstructions`, which
+  reads back as plain text. Pack agents use `systemInstructions`.
+- **Uninstall is unreliable.** The first `POST /xsoar/contentpacks/installed/delete`,
+  sent about 5 minutes after install, returned `200 {}` and did nothing for over 10
+  minutes. The same request sent again removed the pack, agent and actions within 50
+  seconds. Poll `/xsoar/contentpacks/metadata/installed` and resend if needed.
+- **Uninstall leaves the knowledge collection behind.** It stays as `isSystem: true` with
+  the old `packID`, and `DELETE /xsoar/cm/agentix/knowledgecollections/<id>` refuses with
+  `Item is system and cannot be modified (100001)`. A collection from a removed probe pack
+  sits on an 8.15 tenant the same way. Reusing the id in a later pack
+  install presumably takes it over again.* Do not put anything in a test collection's
+  description that you would not want left on the tenant.
+
 ## 15. Reference implementation
 
 `Packs/FirewallAlertAnalyst` exercises `command` (with a named integration and with
@@ -466,6 +606,23 @@ no `dockerimage`).
 README.
 
 ## 16. MCP servers
+
+**demisto-sdk 1.39.9+ and XSIAM 4.0: `mcps` on the agent.** An agent can now declare MCP
+servers itself:
+
+```yaml
+mcps:
+  - server_url: https://cortex-docs.paloaltonetworks.com/~gitbook/mcp
+```
+
+`server_url` is the only field, and it is required. The schema has no auth field, so this
+suits unauthenticated servers.* Uploaded to a 4.0 tenant, the agent read back with `mcps`
+intact. No built-in agent on that tenant uses the field, and generated `mcp_*` actions were
+not checked during the test. So whether the agent discovers and calls the server's tools at runtime is untested.* The
+rest of this section, binding instance-generated action ids, is the 8.15-era route and
+still works. It is the only one that supports authenticated servers.
+
+The original finding follows.
 
 An agent CAN call an MCP server. It is native, needs no skill, and needs no pack content -
 but it is tenant configuration, not content, and cannot be authored in a pack.

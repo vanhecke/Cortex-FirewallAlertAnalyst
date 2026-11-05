@@ -23,7 +23,7 @@ skills, matching SDK convention) plus that token:
 | AgentixAction | `Action` | `ScoreFirewallAlertAction` |
 | Script, Python | `Script` | `ScoreFirewallAlertScript` |
 | Script, `isllm: true` | `Prompt` | `TriageFirewallAlertPrompt` |
-| Collection | `Collection` | `FirewallTriageWorkedAlertsCollection` |
+| Knowledge (collection) | `Collection` | `FirewallTriageWorkedAlertsCollection` |
 
 The point is the action-to-underlying-item pair. `ScoreFirewallAlertAction` and
 `ScoreFirewallAlertScript` share a stem and differ only in the token, so which is which
@@ -44,17 +44,17 @@ wanted.
 
 | Path | Capability |
 | --- | --- |
-| `AgentixAgents/firewall-alert-analyst-agent/` | every agent field: `color`, `visibility`, `conversationstarters`, `builtinactions`, `autoenablenewactions`, `roles`, `sharedwithroles`, `actionids`, `skillids`, `collectionids`, plus the required `_systeminstructions.md` (AG110) |
+| `AgentixAgents/firewall-alert-analyst-agent/` | every agent field: `color`, `visibility`, `conversationstarters`, `builtinactions`, `autoenablenewactions`, `roles`, `sharedwithroles`, `actionids`, `skillids`, `knowledgeids` (one pack collection plus Palo Alto's managed `cortex-platform-docs`), `mcps`, plus the required `_systeminstructions.md` (AG110) |
 | `AgentixActions/SearchFirewallLogsAction/` | `underlyingcontentitem.type: command`, `requiresuserapproval`, `defaultvalue`, output `disabled` |
 | `AgentixActions/GetFirewallSearchResultsAction/` | `type: command`, polling discipline in `fewshots` |
 | `AgentixActions/ScoreFirewallAlertAction/` | `type: script`, and the full arg-flag set: `isgeneratable`, `hidden`, `disabled`, `defaultvalue` |
 | `AgentixActions/DraftEscalationNoteAction/` | `isgeneratable` true on the prose args and false on the identifiers - and the live result that the flag does not enforce that split (see below) |
 | `AgentixActions/TriageFirewallAlertAction/` | `type: prompt` - an LLM step with no Python behind it, wrapping `TriageFirewallAlertPrompt` |
 | `AgentixActions/GetCaseDetailsAction/` | `type: command` bound with `_any_` to a platform command (`core-get-cases`) rather than to an integration by name |
-| `AgentixActions/BlockIpAction/` | `type: playbook` - wraps `Block IP - Generic v3`. The web UI cannot author this: building an action there offers only commands and scripts, so a playbook-backed action has to come from a pack |
+| `AgentixActions/BlockIpAction/` | `type: playbook` - wraps `Block IP - Generic v3`. The web UI cannot author this: building an action there offers only commands and scripts, so a playbook-backed action has to come from a pack. Also the long-running action: `islongrunning` / `longrunningtimeoutseconds` (XSIAM 4.0) |
 | `*/<Action>_test.yml` | AgentixActionTest (AG118), in both `any_of` and `sequence` modes |
 | `AgentixSkills/firewall-alert-triage-skill/` | the skill body plus `<action=Id>` reference tokens (AG111) |
-| `Collections/FirewallTriageWorkedAlertsCollection/` | a knowledge collection handle |
+| `Knowledge/FirewallTriageWorkedAlertsCollection/` | a knowledge collection handle (`Collections/` before demisto-sdk 1.39.13) |
 | `Scripts/ScoreFirewallAlertScript/` | a split `.yml` + `.py` Python automation |
 | `Scripts/TriageFirewallAlertPrompt/` | `isllm: true` with `userprompt`, and `promptConfig` carrying `modelTier` and `systemInstruction` |
 
@@ -160,10 +160,18 @@ pack works on a current tenant. Ours was the only prompt-backed and only `intern
 among 130 on that tenant, and the only agent using a collection - these paths are not
 exercised by shipped content.
 
+**On XSIAM 4.0 (server 8.16) everything installs live.** Verified on 2026-11-04: all seven
+actions, the skill and the collection installed, and the agent kept every field,
+including `mcps`, the managed `cortex-platform-docs` binding and the long-running flag on
+`BlockIpAction`. Uninstall needed a second request, and it leaves the collection behind.
+See AGENT_SPEC.md sections 0 and 14.
+
 ## Working on it
 
-Requires [demisto-sdk](https://github.com/demisto/demisto-sdk) and a Cortex XSIAM tenant.
-Run from the repository root, not from this directory.
+Requires [demisto-sdk](https://github.com/demisto/demisto-sdk) **1.39.13 or later** (earlier
+versions expect `Collections/` and `collectionids`) and a Cortex XSIAM tenant. The
+managed `cortex-platform-docs` knowledge needs XSIAM 4.0. Run from the repository root,
+not from this directory.
 
 ```bash
 export DEMISTO_BASE_URL="https://api-<tenant>.xdr.<region>.paloaltonetworks.com"
@@ -172,6 +180,10 @@ export XSIAM_AUTH_ID="<auth id>"
 
 demisto-sdk validate -i Packs/FirewallAlertAnalyst --config-path validation_config.toml
 demisto-sdk upload   -i Packs/FirewallAlertAnalyst -z --marketplace platform
+
+# Or build an installable zip without uploading. Not zip-packs: it builds for xsoar and
+# drops every agent item.
+mkdir -p build && demisto-sdk prepare-content -i Packs/FirewallAlertAnalyst -o build -mp platform
 ```
 
 `--config-path` is not optional in practice: the SDK's default config selects no agentix
@@ -183,6 +195,10 @@ you will get the old and new objects side by side:
 ```
 POST /xsoar/contentpacks/installed/delete   {"IDs": ["FirewallAlertAnalyst"]}
 ```
+
+On XSIAM 4.0 check that it took: the first request can return `200 {}` and do nothing.
+The knowledge collection is left behind either way, as a system item the API will not
+delete.
 
 External dependencies: the Cortex XQL integration (`xdr-xql-generic-query`,
 `xdr-xql-get-query-results`), `Cortex Core - Platform` (`core-get-cases`), and the

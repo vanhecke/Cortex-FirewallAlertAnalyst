@@ -72,6 +72,12 @@ underlyingcontentitem:
   type: playbook
   version: -1
 requiresuserapproval: true
+# Long-running action (demisto-sdk 1.39.9+, server fields isLongRunning and
+# longRunningTimeoutSeconds on XSIAM 4.0). A playbook with a human verification step can
+# outlast a normal action timeout. XSIAM 4.0's only built-in long-running action,
+# CortexIngestLogs, uses 3600.
+islongrunning: true
+longrunningtimeoutseconds: 1800
 fewshots:
   - >-
     On explicit instruction: IP="203.0.113.10", RuleName="FW triage 1234: repeated denied
